@@ -14,8 +14,7 @@ func UserInit() error {
 	if err := mq.Channel.ExchangeDeclare(ExchangeUser, "direct", false, false, false, false, nil); err != nil {
 		return err
 	}
-	qs := fmt.Sprintf("%s,%s", QueueRegister, QueueRegisterUnion)
-	if err := mq.DeclareQueueAndBind(qs, RouterKeyUser, ExchangeUser); err != nil {
+	if err := mq.DeclareQueueAndBind(ExchangeUser, RouterKeyUser, QueueRegister, QueueRegisterUnion); err != nil {
 		return err
 	}
 	return nil

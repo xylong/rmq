@@ -9,8 +9,6 @@ import (
 	"strconv"
 )
 
-const QueueRegister = "register"
-
 func main() {
 	router := gin.Default()
 
@@ -24,7 +22,7 @@ func main() {
 
 		if id, err := user.Create(user); err == nil && id > 0 {
 			mq := lib.NewMQ()
-			if err = mq.Send(lib.RouterKeyUser, lib.ExchangeUser, strconv.Itoa(int(id))); err != nil {
+			if err = mq.Send(lib.ExchangeUser, lib.RouterKeyUser, strconv.Itoa(int(id))); err != nil {
 				log.Println(err)
 			}
 			defer mq.Channel.Close()
