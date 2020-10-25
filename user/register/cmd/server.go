@@ -7,6 +7,7 @@ import (
 	"rmq/lib"
 	"rmq/model"
 	"strconv"
+	"time"
 )
 
 func main() {
@@ -20,9 +21,11 @@ func main() {
 			})
 		}
 
-		if id, err := user.Create(user); err == nil && id > 0 {
+		user.ID = uint(time.Now().Unix())
+		//if id, err := user.Create(user); err == nil && id > 0 {
+		if user.ID > 0 {
 			mq := lib.NewMQ()
-			if err = mq.Send(lib.ExchangeUser, lib.RouterKeyUser, strconv.Itoa(int(id))); err != nil {
+			if err := mq.Send(lib.ExchangeUser, lib.RouterKeyUser, strconv.Itoa(int(user.ID))); err != nil {
 				log.Println(err)
 			}
 			defer mq.Channel.Close()
@@ -34,7 +37,7 @@ func main() {
 		} else {
 			context.JSON(http.StatusOK, gin.H{
 				"msg":  "fail",
-				"data": id,
+				"data": user.ID,
 			})
 		}
 	})

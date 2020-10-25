@@ -13,14 +13,21 @@ import (
 // 没有消息的时候就一直阻塞
 func SendEmail(msgs <-chan amqp.Delivery, c string) {
 	for msg := range msgs {
-		fmt.Printf("%s向user:%s发送邮件\n", c, string(msg.Body))
-		time.Sleep(time.Second * 2) // 模拟发送邮件
-		if c == "c1" {
-			msg.Reject(true) // 重新入列
-			continue         // 模拟c1故障
-		}
-		msg.Ack(false)
+		//if c == "c1" {
+		//	msg.Reject(true) // 重新入列
+		//	continue         // 模拟c1故障
+		//}
+		fmt.Printf("%s receive msg:%s\n", c, string(msg.Body))
+		go send(c, msg)
 	}
+}
+
+// send 模拟邮件发送过程
+func send(c string, msg amqp.Delivery) error {
+	time.Sleep(time.Second * 3) // 模拟耗时
+	fmt.Printf("%s send email to user:%s\n", c, string(msg.Body))
+	msg.Ack(false)
+	return nil
 }
 
 func main() {
@@ -32,6 +39,10 @@ func main() {
 	}
 
 	mq := lib.NewMQ()
+	// 限流
+	if err := mq.Channel.Qos(2, 0, false); err != nil {
+		log.Fatal(err)
+	}
 	mq.Consume(lib.QueueRegister, *c, SendEmail)
 	defer mq.Channel.Close()
 }
