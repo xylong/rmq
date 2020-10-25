@@ -15,7 +15,8 @@ const (
 
 // MQ RabbitMQ
 type MQ struct {
-	Channel *amqp.Channel
+	Channel       *amqp.Channel
+	notifyConfirm chan amqp.Confirmation
 }
 
 // NewMQ 创建mq实例
@@ -49,6 +50,25 @@ func (mq *MQ) Consume(queue, consumer string, callback func(<-chan amqp.Delivery
 		log.Fatal(err)
 	} else {
 		callback(msgs, consumer)
+	}
+}
+
+// SetConfirm 发送设置confirm模式
+func (mq *MQ) SetConfirm() {
+	if err := mq.Channel.Confirm(false); err != nil {
+		log.Fatal(err)
+	}
+	mq.notifyConfirm = mq.Channel.NotifyPublish(make(chan amqp.Confirmation))
+	go mq.ListenConfirm()
+}
+
+func (mq *MQ) ListenConfirm() {
+	defer mq.Channel.Close()
+	res := <-mq.notifyConfirm
+	if res.Ack {
+		log.Println("send success")
+	} else {
+		log.Println("send fail")
 	}
 }
 

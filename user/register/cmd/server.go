@@ -25,10 +25,11 @@ func main() {
 		//if id, err := user.Create(user); err == nil && id > 0 {
 		if user.ID > 0 {
 			mq := lib.NewMQ()
+			mq.SetConfirm() // 开启confirm
 			if err := mq.Send(lib.ExchangeUser, lib.RouterKeyUser, strconv.Itoa(int(user.ID))); err != nil {
 				log.Println(err)
 			}
-			defer mq.Channel.Close()
+			//defer mq.Channel.Close()
 
 			context.JSON(http.StatusOK, gin.H{
 				"msg":  "ok",
