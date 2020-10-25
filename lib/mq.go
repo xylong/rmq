@@ -42,11 +42,13 @@ func (mq *MQ) Send(exchange, key, msg string) (err error) {
 }
 
 // Consume 消费消息
-func (mq *MQ) Consume(queue, key string, callback func(<-chan amqp.Delivery)) {
-	if msgs, err := mq.Channel.Consume(queue, key, false, false, false, false, nil); err != nil {
+// queue 队列
+// consumer 消费者
+func (mq *MQ) Consume(queue, consumer string, callback func(<-chan amqp.Delivery, string)) {
+	if msgs, err := mq.Channel.Consume(queue, consumer, false, false, false, false, nil); err != nil {
 		log.Fatal(err)
 	} else {
-		callback(msgs)
+		callback(msgs, consumer)
 	}
 }
 
