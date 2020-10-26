@@ -25,7 +25,8 @@ func main() {
 		//if id, err := user.Create(user); err == nil && id > 0 {
 		if user.ID > 0 {
 			mq := lib.NewMQ()
-			mq.SetConfirm() // 开启confirm
+			mq.SetConfirm()   // 开启confirm
+			mq.NotifyReturn() // 监听return
 			if err := mq.Send(lib.ExchangeUser, lib.RouterKeyUser, strconv.Itoa(int(user.ID))); err != nil {
 				log.Println(err)
 			}

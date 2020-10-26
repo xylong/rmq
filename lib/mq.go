@@ -17,6 +17,7 @@ const (
 type MQ struct {
 	Channel       *amqp.Channel
 	notifyConfirm chan amqp.Confirmation
+	notifyReturn  chan amqp.Return
 }
 
 // NewMQ 创建mq实例
@@ -36,7 +37,8 @@ func NewMQ() *MQ {
 
 // Send 发送消息
 func (mq *MQ) Send(exchange, key, msg string) (err error) {
-	return mq.Channel.Publish(exchange, key, false, false, amqp.Publishing{
+	// mandatory 为true时，发送失败将消息返还生产者
+	return mq.Channel.Publish(exchange, key, true, false, amqp.Publishing{
 		ContentType: "text/plain",
 		Body:        []byte(msg),
 	})
@@ -87,4 +89,19 @@ func (mq *MQ) DeclareQueueAndBind(exchange, key string, queues ...string) error 
 	}
 
 	return nil
+}
+
+// NotifyReturn 入队失败回执
+func (mq *MQ) NotifyReturn() {
+	mq.notifyReturn = mq.Channel.NotifyReturn(make(chan amqp.Return))
+	go mq.ListenReturn() // 协程执行
+}
+
+// ListenReturn 监听回执
+func (mq *MQ) ListenReturn() {
+	res := <-mq.notifyReturn
+	msg := string(res.Body)
+	if msg != "" {
+		log.Println("消息没有正确入列:", msg)
+	}
 }
