@@ -6,84 +6,39 @@ import (
 	"rmq/app"
 )
 
-const (
-	QueueRegister      = "register"
-	QueueRegisterUnion = "register_union"
-	ExchangeUser       = "user_exchange"
-	RouterKeyUser      = "user_register"
-)
-
 // MQ RabbitMQ
 type MQ struct {
-	Channel       *amqp.Channel
+	// Channel rabbitMQ的channel
+	Channel *amqp.Channel
+	// notifyConfirm 发送时的确认通知消息
 	notifyConfirm chan amqp.Confirmation
-	notifyReturn  chan amqp.Return
+	// notifyReturn 入队失败，返还通知
+	notifyReturn chan amqp.Return
 }
 
-// NewMQ 创建mq实例
+// NewMQ 创建mq
 func NewMQ() *MQ {
-	var (
-		err error
-		c   *amqp.Channel
-	)
-	if c, err = app.GetConn().Channel(); err != nil {
+	if c, err := app.GetConn().Channel(); err != nil {
 		log.Println(err)
 		return nil
-	}
-	return &MQ{
-		Channel: c,
-	}
-}
-
-// Send 发送消息
-func (mq *MQ) Send(exchange, key, msg string) (err error) {
-	// mandatory 为true时，发送失败将消息返还生产者
-	return mq.Channel.Publish(exchange, key, true, false, amqp.Publishing{
-		ContentType: "text/plain",
-		Body:        []byte(msg),
-	})
-}
-
-// Consume 消费消息
-// queue 队列
-// consumer 消费者
-func (mq *MQ) Consume(queue, consumer string, callback func(<-chan amqp.Delivery, string)) {
-	if msgs, err := mq.Channel.Consume(queue, consumer, false, false, false, false, nil); err != nil {
-		log.Fatal(err)
 	} else {
-		callback(msgs, consumer)
-	}
-}
-
-// SetConfirm 发送设置confirm模式
-func (mq *MQ) SetConfirm() {
-	if err := mq.Channel.Confirm(false); err != nil {
-		log.Fatal(err)
-	}
-	mq.notifyConfirm = mq.Channel.NotifyPublish(make(chan amqp.Confirmation))
-	go mq.ListenConfirm()
-}
-
-func (mq *MQ) ListenConfirm() {
-	defer mq.Channel.Close()
-	res := <-mq.notifyConfirm
-	if res.Ack {
-		log.Println("send success")
-	} else {
-		log.Println("send fail")
-	}
-}
-
-// DeclareQueueAndBind 申明队列并且绑定
-// queues 多个队列逗号分隔
-func (mq *MQ) DeclareQueueAndBind(exchange, key string, queues ...string) error {
-	for _, queue := range queues {
-		q, err := mq.Channel.QueueDeclare(queue, false, false, false, false, nil)
-		if err != nil {
-			return err
+		return &MQ{
+			Channel: c,
 		}
+	}
+}
 
-		if err = mq.Channel.QueueBind(q.Name, key, exchange, false, nil); err != nil {
+// DeclareAndBind
+// key 路由
+// exchange 交换机
+// queues 队列
+func (mq *MQ) DeclareAndBind(key, exchange string, queues ...string) error {
+	for _, queue := range queues {
+		if q, err := mq.Channel.QueueDeclare(queue, false, false, false, false, nil); err == nil {
+			if err = mq.Channel.QueueBind(q.Name, key, exchange, false, nil); err != nil {
+				return err
+			}
+		} else {
 			return err
 		}
 	}
@@ -91,17 +46,75 @@ func (mq *MQ) DeclareQueueAndBind(exchange, key string, queues ...string) error 
 	return nil
 }
 
-// NotifyReturn 入队失败回执
-func (mq *MQ) NotifyReturn() {
-	mq.notifyReturn = mq.Channel.NotifyReturn(make(chan amqp.Return))
-	go mq.ListenReturn() // 协程执行
+// SetConfirm 开启发送确认
+// 开启此功能会消耗性能
+func (mq *MQ) SetConfirm() {
+	if err := mq.Channel.Confirm(false); err != nil {
+		log.Println(err)
+	} else {
+		mq.notifyConfirm = mq.Channel.NotifyPublish(make(chan amqp.Confirmation))
+	}
 }
 
-// ListenReturn 监听回执
-func (mq *MQ) ListenReturn() {
-	res := <-mq.notifyReturn
-	msg := string(res.Body)
-	if msg != "" {
-		log.Println("消息没有正确入列:", msg)
+// ListenConfirm 监听确认消息
+func (mq *MQ) ListenConfirm() {
+	defer mq.Channel.Close()
+	res := <-mq.notifyConfirm
+	if res.Ack {
+		log.Println("send succeed")
+	} else {
+		log.Println("send failed")
+	}
+}
+
+// NotifyReturn 入队返还通知
+// 阻塞
+func (mq *MQ) NotifyReturn() {
+	mq.notifyReturn = mq.Channel.NotifyReturn(make(chan amqp.Return))
+	go mq.listenReturn() // 协程执行
+}
+
+// listenReturn 监听入队返回通知
+func (mq *MQ) listenReturn() {
+	notify := <-mq.notifyReturn
+	if msg := string(notify.Body); msg != "" {
+		log.Printf("message:\"%s\" not listed correctly", msg)
+	}
+}
+
+// Send 发送消息
+// exchange 交换机
+// key 路由
+// message 消息
+func (mq *MQ) Send(exchange, key, message string) error {
+	// mandatory 若为true，在exchange正常且可以到达的情况下，如果exchange+routerKey无法将消息投递给queue，那么MQ会将消息返还给生产者
+	//           若为false，则直接丢弃
+	return mq.Channel.Publish(exchange, key, true, false, amqp.Publishing{
+		ContentType: "text/plain",
+		Body:        []byte(message),
+	})
+}
+
+// SendDelay 发送延迟消息
+// delay 延迟时间 (毫秒)
+func (mq *MQ) SendDelay(exchange, key, message string, delay int) error {
+	return mq.Channel.Publish(exchange, key, true, false, amqp.Publishing{
+		Headers: map[string]interface{}{
+			"x-delay": delay,
+		},
+		ContentType: "text/plain",
+		Body:        []byte(message),
+	})
+}
+
+// Receive 接收消息
+// queue 队列名
+// consumer 消费者
+// callback 收到消息后执行的回调函数
+func (mq *MQ) Receive(queue, consumer string, callback func(<-chan amqp.Delivery, string)) {
+	if msg, err := mq.Channel.Consume(queue, consumer, false, false, false, false, nil); err != nil {
+		log.Fatal(err)
+	} else {
+		callback(msg, consumer)
 	}
 }

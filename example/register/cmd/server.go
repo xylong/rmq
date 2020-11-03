@@ -4,11 +4,16 @@ import (
 	"github.com/gin-gonic/gin"
 	"log"
 	"net/http"
+	"rmq/app"
+	"rmq/example/register/model"
+	"rmq/example/register/service"
 	"rmq/lib"
-	"rmq/model"
 	"strconv"
-	"time"
 )
+
+func init() {
+	app.GetDB().AutoMigrate(&model.User{})
+}
 
 func main() {
 	router := gin.Default()
@@ -21,21 +26,20 @@ func main() {
 			})
 		}
 
-		user.ID = uint(time.Now().Unix())
-		//if id, err := user.Create(user); err == nil && id > 0 {
-		if user.ID > 0 {
-			mq := lib.NewMQ()
-			mq.SetConfirm()   // 开启confirm
-			mq.NotifyReturn() // 监听return
-			if err := mq.Send(lib.ExchangeUser, lib.RouterKeyUser, strconv.Itoa(int(user.ID))); err != nil {
-				log.Println(err)
-			}
-			//defer mq.Channel.Close()
-
+		if id, err := user.Create(user); err == nil && id > 0 {
+			// api返回
 			context.JSON(http.StatusOK, gin.H{
 				"msg":  "ok",
 				"data": user,
 			})
+			// 队列
+			mq := lib.NewMQ()
+			defer mq.Channel.Close()
+			mq.SetConfirm() // 开启确认
+			mq.NotifyReturn()
+			//_ = mq.Send(service.UserExchange, service.RegisterRouter, strconv.Itoa(int(id)))
+			_ = mq.SendDelay(service.UserDelayExchange, service.RegisterRouter, strconv.Itoa(int(id)), 3000)
+			mq.ListenConfirm() // 监听是否发送成功
 		} else {
 			context.JSON(http.StatusOK, gin.H{
 				"msg":  "fail",
@@ -45,6 +49,7 @@ func main() {
 	})
 
 	c := make(chan error)
+
 	go func() {
 		if err := router.Run(); err != nil {
 			c <- err
@@ -52,9 +57,13 @@ func main() {
 	}()
 
 	go func() {
-		if err := lib.UserInit(); err != nil {
+		if err := service.UserInit(); err != nil {
+			c <- err
+		}
+		if err := service.UserDelayInit(); err != nil {
 			c <- err
 		}
 	}()
+
 	log.Fatal(<-c)
 }

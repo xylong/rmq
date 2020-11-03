@@ -5,6 +5,7 @@ import (
 	"rmq/app"
 )
 
+// User 用户
 type User struct {
 	gorm.Model
 	Name     string `gorm:"type:varchar(20);not null;" json:"name" form:"name"`
