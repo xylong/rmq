@@ -12,7 +12,10 @@ import (
 )
 
 func init() {
-	app.GetDB().AutoMigrate(&model.User{})
+	app.GetDB().AutoMigrate(
+		&model.User{},
+		&model.UserRegisterNotify{},
+	)
 }
 
 func main() {
@@ -38,7 +41,7 @@ func main() {
 			mq.SetConfirm() // 开启确认
 			mq.NotifyReturn()
 			//_ = mq.Send(service.UserExchange, service.RegisterRouter, strconv.Itoa(int(id)))
-			_ = mq.SendDelay(service.UserDelayExchange, service.RegisterRouter, strconv.Itoa(int(id)), 3000)
+			_ = mq.SendDelay(service.UserDelayExchange, service.RegisterRouter, strconv.Itoa(int(id)), 1500)
 			mq.ListenConfirm() // 监听是否发送成功
 		} else {
 			context.JSON(http.StatusOK, gin.H{
