@@ -7,6 +7,12 @@ import (
 	"rmq/example/transfer/model"
 )
 
+const (
+	TransExchange = "trans_exchange" // 转账交换机
+	TransrRouter  = "trans"          // 转账路由
+	TransQueue    = "trans_a"        // a的转账队列
+)
+
 // Transfer 转账
 func Transfer(trans *model.Trans) error {
 	tx := transfer.GetDB().Begin()
