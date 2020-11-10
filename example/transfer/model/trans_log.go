@@ -2,6 +2,12 @@ package model
 
 import "github.com/jinzhu/gorm"
 
+const (
+	TradeProgressing = 0 // 交易进行中
+	TradeSuccess     = 1 // 交易成功
+	TradeFail        = 2 // 交易失败
+)
+
 // TransLog 转账日志
 type TransLog struct {
 	gorm.Model
