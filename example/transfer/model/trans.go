@@ -6,6 +6,7 @@ import (
 
 // Trans 转账
 type Trans struct {
+	ID    int    `json:"id"`
 	From  string `json:"from" form:"from"`
 	To    string `json:"to" form:"to"`
 	Money int    `json:"money" form:"money"`
