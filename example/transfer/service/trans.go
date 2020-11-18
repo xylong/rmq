@@ -22,15 +22,16 @@ func Transfer(trans *model.Trans) error {
 		return fmt.Errorf("扣款失败")
 	}
 
-	if err := tx.Create(&model.TransLog{
+	log := &model.TransLog{
 		From:  trans.From,
 		To:    trans.To,
 		Money: trans.Money,
-	}).Error; err != nil {
+	}
+	if tx.Create(log).Error != nil {
 		tx.Rollback()
 		return fmt.Errorf("日志记录失败")
 	}
-
+	trans.ID = int(log.ID) // 交易号
 	tx.Commit()
 	return nil
 }

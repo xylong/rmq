@@ -1,12 +1,15 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"github.com/jinzhu/gorm"
 	"github.com/robfig/cron/v3"
 	"log"
 	"rmq/example/transfer"
 	"rmq/example/transfer/model"
+	"rmq/example/transfer/service"
+	"rmq/lib"
 )
 
 var (
@@ -15,11 +18,18 @@ var (
 )
 
 // InitCron 初始化定时任务
-func InitCron() (err error) {
+func InitCron() error {
 	cro = cron.New(cron.WithSeconds())
-	//_, err = cro.AddFunc("0/3 * * * * *", CancelTransaction)
-	_, err = cro.AddFunc("0/4 * * * * *", Refund)
-	return
+	if _, err := cro.AddFunc("0/3 * * * * *", CancelTransaction); err != nil {
+		return err
+	}
+	if _, err := cro.AddFunc("0/4 * * * * *", Refund); err != nil {
+		return err
+	}
+	if _, err := cro.AddFunc("0/2 * * * * *", Retransmission); err != nil {
+		return err
+	}
+	return nil
 }
 
 // CancelTransaction 取消交易
@@ -61,6 +71,29 @@ func Refund() {
 	}
 	tx.Commit()
 	lock = false // 解锁
+}
+
+// Retransmission 重发
+func Retransmission() {
+	var (
+		trans []model.Trans
+		logs  []model.TransLog
+	)
+	if err := transfer.GetDB().Where("status=0 and TIMESTAMPDIFF(SECOND,updated_at,now()) <= 8").Select("*").Find(&logs).Scan(&trans).Error; err != nil {
+		log.Println(err)
+	} else {
+		mq := lib.NewMQ()
+		for _, t := range trans {
+			go func(t *model.Trans) {
+				str, _ := json.Marshal(t)
+				if err := mq.Send(service.TransExchange, service.TransrRouter, string(str)); err != nil {
+					log.Println(err)
+				} else {
+					log.Println("重发成功")
+				}
+			}(&t)
+		}
+	}
 }
 
 func main() {
