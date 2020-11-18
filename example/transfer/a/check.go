@@ -43,22 +43,24 @@ func Refund() {
 		logs  []model.TransLog
 	)
 	tx := transfer.GetDB().Begin()
-	lock = true
+	lock = true // 加锁
 	//time.Sleep(time.Second * 10)  // 测试下锁
 	if err := tx.Where("status=2 and is_back=0").Select("id,`from`,money").Limit(10).Find(&logs).Scan(&trans).Error; err != nil {
 		tx.Rollback()
 	}
 
 	for _, tran := range trans {
+		// 退款
 		if res := tx.Model(&model.AMoney{}).Where("user_name=?", tran.From).Update("money", gorm.Expr("money + ?", tran.Money)); res.Error != nil || res.RowsAffected == 0 {
 			tx.Rollback()
 		}
+		// 退款状态
 		if err := tx.Model(&model.TransLog{}).Where("id=?", tran.ID).Update("is_back", model.RefundYes).Error; err != nil {
 			tx.Rollback()
 		}
 	}
 	tx.Commit()
-	lock = false
+	lock = false // 解锁
 }
 
 func main() {
