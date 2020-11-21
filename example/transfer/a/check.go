@@ -36,7 +36,7 @@ func InitCron() error {
 // 定时执行
 func CancelTransaction() {
 	if err := transfer.GetDB().Model(&model.TransLog{}).
-		Where("TIMESTAMPDIFF(SECOND,updated_at,now()) > 20 and status<>2").
+		Where("TIMESTAMPDIFF(SECOND,updated_at,now()) > 20 and status=0").
 		Update("status", model.TradeFail).Error; err != nil {
 		log.Fatal(err)
 	}

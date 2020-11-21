@@ -9,6 +9,7 @@ import (
 	"rmq/example/transfer/model"
 	"rmq/example/transfer/service"
 	"rmq/lib"
+	"strconv"
 )
 
 func init() {
@@ -38,6 +39,17 @@ func main() {
 			context.JSON(http.StatusBadRequest, gin.H{
 				"msg": err.Error(),
 			})
+		}
+	})
+
+	// 回调函数
+	router.Handle(http.MethodPost, "/callback", func(context *gin.Context) {
+		tid := context.PostForm("tid")
+		id, _ := strconv.Atoi(tid)
+		if service.FinishTransfer(id) {
+			context.String(http.StatusOK, "success")
+		} else {
+			context.String(http.StatusOK, "fail")
 		}
 	})
 

@@ -35,3 +35,12 @@ func Transfer(trans *model.Trans) error {
 	tx.Commit()
 	return nil
 }
+
+// FinishTransfer 完成转账
+func FinishTransfer(id int) bool {
+	fmt.Println(id)
+	if transfer.GetDB().Model(&model.TransLog{}).Where("id=? and status=0", id).Update("status", 1).RowsAffected == 0 {
+		return false
+	}
+	return true
+}
